@@ -3,7 +3,7 @@ import Onboarding from './views/Onboarding';
 import Dashboard from './views/Dashboard';
 import GratitudeModal from './views/GratitudeModal';
 import Sidebar from './components/Sidebar';
-import { generatePlanFromWish } from './services/geminiService';
+import { generatePlanFromWish } from './services/planService';
 import { UserState, ViewState, GratitudeEntry, UserGoal } from './types';
 
 const App = () => {
@@ -174,7 +174,7 @@ const App = () => {
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#FDFCFB]">
         <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-stone-900 mb-4"></div>
         <p className="text-stone-900 font-semibold animate-pulse tracking-tight">Designing your path...</p>
-        <p className="text-stone-400 text-xs mt-2 uppercase tracking-widest">Powered by Gemini</p>
+        <p className="text-stone-400 text-xs mt-2 uppercase tracking-widest">Powered by Qwen</p>
       </div>
     );
   }
