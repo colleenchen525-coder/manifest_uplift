@@ -1,26 +1,27 @@
-import { ManifestationPlan, MicroAction, Affirmation } from "../types";
+import { ManifestationPlan, GoalAction, Affirmation } from "../types";
 
 // Helper to generate unique IDs
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
-const fallbackPlan = (): ManifestationPlan => ({
-  affirmations: [
-    { id: generateId(), text: "I am taking steady steps toward my financial goal.", isAcknowledged: false },
-    { id: generateId(), text: "I control my spending choices to build financial security.", isAcknowledged: false },
-    { id: generateId(), text: "I am actively growing my career skills every day.", isAcknowledged: false },
-    { id: generateId(), text: "I am prioritizing my health through consistent daily habits.", isAcknowledged: false },
-    { id: generateId(), text: "I am showing up for my relationships with care and intention.", isAcknowledged: false }
-  ],
-  microActions: [
-    { id: generateId(), text: "Track one expense or habit related to your goal for 10 minutes.", isCompleted: false },
-    { id: generateId(), text: "Write down one measurable action you can complete today.", isCompleted: false }
-  ],
+const fallbackPlan = (goalAnchor: string): ManifestationPlan => ({
+  affirmations: Array.from({ length: 5 }, () => ({
+    id: generateId(),
+    text: `I am taking intentional actions toward my ${goalAnchor}.`,
+    isAcknowledged: false
+  })),
+  actions: Array.from({ length: 2 }, () => ({
+    id: generateId(),
+    text: `Write down one concrete step you can take today related to ${goalAnchor}.`,
+    isCompleted: false
+  })),
   generatedAt: new Date().toISOString()
 });
 
 type PlanResponse = {
+  goal_anchor?: string;
   affirmations: string[];
-  micro_actions: string[];
+  actions: string[];
+  debug?: string;
 };
 
 export const generatePlanFromWish = async (
@@ -42,14 +43,17 @@ export const generatePlanFromWish = async (
     }
 
     const data = (await response.json()) as PlanResponse;
+    const goalAnchor = (typeof data.goal_anchor === "string" && data.goal_anchor.trim())
+      ? data.goal_anchor.trim()
+      : wish.trim();
 
-    const fallback = fallbackPlan();
+    const fallback = fallbackPlan(goalAnchor);
     const affirmationTexts = Array.isArray(data.affirmations) && data.affirmations.length
       ? data.affirmations.slice(0, 5)
       : fallback.affirmations.map(affirmation => affirmation.text);
-    const microActionTexts = Array.isArray(data.micro_actions) && data.micro_actions.length
-      ? data.micro_actions.slice(0, 2)
-      : fallback.microActions.map(action => action.text);
+    const actionTexts = Array.isArray(data.actions) && data.actions.length
+      ? data.actions.slice(0, 2)
+      : fallback.actions.map(action => action.text);
 
     const affirmations: Affirmation[] = affirmationTexts.map(text => ({
       id: generateId(),
@@ -57,7 +61,7 @@ export const generatePlanFromWish = async (
       isAcknowledged: false
     }));
 
-    const microActions: MicroAction[] = microActionTexts.map(text => ({
+    const actions: GoalAction[] = actionTexts.map(text => ({
       id: generateId(),
       text,
       isCompleted: false
@@ -65,11 +69,11 @@ export const generatePlanFromWish = async (
 
     return {
       affirmations,
-      microActions,
+      actions,
       generatedAt: new Date().toISOString()
     };
   } catch (error) {
     console.error("Error generating plan:", error);
-    return fallbackPlan();
+    return fallbackPlan(wish.trim() || "goal progress");
   }
 };

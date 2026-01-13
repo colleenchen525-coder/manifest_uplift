@@ -3,48 +3,51 @@ const DEFAULT_MODEL = "qwen3-vl-flash";
 
 const SYSTEM_PROMPT = `You are a behavioral science coach.
 
-Your task is not to motivate,
-but to convert vague goals into concrete, controllable actions.
+Your task is to convert a user's goal into
+multiple goal-anchored affirmations and actions.
 
-You must NOT reinterpret the goal.
-You must stay anchored to the user's stated intent.`;
+All outputs must stay anchored to the same goal domain.
+Do not introduce new life domains.`;
 
-const buildUserPrompt = (goal: string) => `User goal: "${goal}"
+const DEBUG_TAG = "ANCHOR_MULTI_V1";
 
-Step 0: Define the goal anchor.
-- Rewrite the user's goal into ONE concrete anchor phrase.
-- The anchor must preserve the original intent.
-- Do NOT change the meaning or domain.
+const buildUserPrompt = (goal: string, strict = false) => `User goal: "${goal}"
+
+Step 0: Define ONE goal anchor.
+- Rewrite the user's goal into ONE short anchor phrase.
+- Preserve the original domain and intent.
+- Do NOT generalize or switch domains.
 
 Examples:
-- "I want to be rich" → "personal financial wealth and money management"
-- "I want to be healthier" → "physical health and daily habits"
+- "I want to be rich" → "personal financial wealth"
+- "I want to be healthier" → "physical health habits"
+- "I want to improve my relationship" → "personal relationships"
+- "I want to grow my career" → "career growth"
 
-Return the anchor internally (do not show to user).
+Step 1: Generate 5 affirmations.
+Rules:
+- Each affirmation must explicitly reference the same goal anchor.
+- Each must express personal agency ("I", "my actions", "my choices").
+- Avoid abstract or spiritual language.
+- No affirmation may introduce a different domain.
+- Each affirmation must be distinct; do not repeat.
 
-Step 1: Classify the goal:
-- Domain (financial / health / career / relationship)
-- Time horizon (short / long)
-- What the user can directly control today
+Step 2: Generate 2 micro-actions.
+Rules:
+- Each action must take ≤5 minutes.
+- Each must involve a concrete object or behavior related to the goal anchor.
+- Each must produce a visible or written outcome.
+- Avoid vague verbs like "track", "reflect", "think" without an object.
+- Each action must be distinct; do not repeat.
 
-Step 2: Generate:
-1. 5 affirmations:
-- Must mention personal agency
-- Must explicitly reference the goal domain and the goal anchor
-- within 15 words
+${strict ? "CRITICAL: Every affirmation and action must include the exact goal_anchor phrase verbatim." : ""}
 
-2. 2 micro-actions:
-- Must be doable in 15 minutes
-- Must involve a concrete object related to the anchor
-  (e.g. bank app, cash amount, balance, expense number)
-- Must produce a visible or written outcome
-- Do NOT use vague verbs like "track", "think", "reflect" without an object
-- Must clearly connect to the goal and the goal anchor
-
-Return JSON only in the following format:
+Return JSON only in this exact format:
 {
-  "affirmations": ["string"],
-  "micro_actions": ["string"]
+  "goal_anchor": "string",
+  "affirmations": ["string", "string", "string", "string", "string"],
+  "actions": ["string", "string"],
+  "debug": "${DEBUG_TAG}"
 }`;
 
 const coerceBody = (body: any) => {
@@ -59,18 +62,61 @@ const coerceBody = (body: any) => {
   return body;
 };
 
-const FALLBACK_RESPONSE = {
+const normalizeText = (value: string) => value.toLowerCase().trim();
+
+const deriveGoalAnchor = (goal: string, provided?: string) => {
+  if (typeof provided === "string" && provided.trim()) {
+    return provided.trim();
+  }
+  return goal.trim();
+};
+
+const buildFallbackResponse = (goalAnchor: string) => ({
+  goal_anchor: goalAnchor,
   affirmations: [
-    "I am taking steady steps toward my financial goal.",
-    "I control my spending choices to build financial security.",
-    "I am actively growing my career skills every day.",
-    "I am prioritizing my health through consistent daily habits.",
-    "I am showing up for my relationships with care and intention."
+    `I am taking intentional actions toward my ${goalAnchor} every day.`,
+    `I choose tasks that move my ${goalAnchor} forward.`,
+    `My daily decisions support my ${goalAnchor}.`,
+    `I follow through on plans that build my ${goalAnchor}.`,
+    `I stay focused on my ${goalAnchor} with each step I take.`
   ],
-  micro_actions: [
-    "Track one expense or habit related to your goal for 10 minutes.",
-    "Write down one measurable action you can complete today."
-  ]
+  actions: [
+    `Write one sentence describing a concrete step for ${goalAnchor}.`,
+    `List one specific item or behavior you can change today for ${goalAnchor}.`
+  ],
+  debug: DEBUG_TAG
+});
+
+const coerceStringArray = (value: unknown, limit: number) => {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string").slice(0, limit);
+};
+
+const isAnchorReferenced = (item: string, goalAnchor: string) =>
+  normalizeText(item).includes(normalizeText(goalAnchor));
+
+const hasUniqueItems = (items: string[]) => {
+  const normalized = items.map(item => normalizeText(item));
+  return new Set(normalized).size === normalized.length;
+};
+
+const validatePlan = (plan: any, goal: string) => {
+  const goalAnchor = deriveGoalAnchor(goal, plan?.goal_anchor);
+  const affirmations = coerceStringArray(plan?.affirmations, 5);
+  const actions = coerceStringArray(plan?.actions ?? plan?.micro_actions, 2);
+
+  const hasValidCounts = affirmations.length === 5 && actions.length === 2;
+  const hasAnchoredItems = [...affirmations, ...actions].every(item =>
+    isAnchorReferenced(item, goalAnchor)
+  );
+  const hasDistinctItems = hasUniqueItems(affirmations) && hasUniqueItems(actions);
+
+  return {
+    goalAnchor,
+    affirmations,
+    actions,
+    isValid: hasValidCounts && hasAnchoredItems && hasDistinctItems
+  };
 };
 
 const parsePlanContent = (content: string) => {
@@ -112,52 +158,64 @@ export default async function handler(req: any, res: any) {
   const baseUrl = process.env.DASHSCOPE_BASE_URL || DEFAULT_BASE_URL;
   const model = process.env.QWEN_MODEL || DEFAULT_MODEL;
 
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.7,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: buildUserPrompt(wish) }
-      ]
-    })
-  });
+  const prompts = [buildUserPrompt(wish), buildUserPrompt(wish, true)];
+  let validatedPlan: ReturnType<typeof validatePlan> | null = null;
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    res.status(response.status).json({ error: errorText || "DashScope request failed" });
-    return;
+  for (const prompt of prompts) {
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.7,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: prompt }
+        ]
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      res.status(response.status).json({ error: errorText || "DashScope request failed" });
+      return;
+    }
+
+    const data = await response.json();
+    const content = data?.choices?.[0]?.message?.content;
+
+    if (!content) {
+      continue;
+    }
+
+    const parsed = parsePlanContent(content);
+    if (!parsed || typeof parsed !== "object") {
+      continue;
+    }
+
+    const validation = validatePlan(parsed, wish);
+    if (validation.isValid) {
+      validatedPlan = validation;
+      break;
+    }
+
+    validatedPlan = validation;
   }
 
-  const data = await response.json();
-  const content = data?.choices?.[0]?.message?.content;
-
-  if (!content) {
-    res.status(500).json({ error: "No response content from DashScope" });
+  if (!validatedPlan || !validatedPlan.isValid) {
+    const goalAnchor = validatedPlan?.goalAnchor ?? deriveGoalAnchor(wish);
+    res.status(200).json(buildFallbackResponse(goalAnchor));
     return;
   }
-
-  const parsed = parsePlanContent(content);
-  if (!parsed || typeof parsed !== "object") {
-    res.status(200).json(FALLBACK_RESPONSE);
-    return;
-  }
-
-  const affirmations = Array.isArray(parsed.affirmations)
-    ? parsed.affirmations.filter((item: unknown) => typeof item === "string").slice(0, 5)
-    : [];
-  const microActions = Array.isArray(parsed.micro_actions)
-    ? parsed.micro_actions.filter((item: unknown) => typeof item === "string").slice(0, 2)
-    : [];
 
   res.status(200).json({
-    affirmations: affirmations.length ? affirmations : FALLBACK_RESPONSE.affirmations,
-    micro_actions: microActions.length ? microActions : FALLBACK_RESPONSE.micro_actions
+    goal_anchor: validatedPlan.goalAnchor,
+    affirmations: validatedPlan.affirmations,
+    actions: validatedPlan.actions,
+    debug: DEBUG_TAG
   });
 }
