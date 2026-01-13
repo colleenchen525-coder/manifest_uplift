@@ -7,7 +7,6 @@ export interface MicroAction {
 export interface Affirmation {
   id: string;
   text: string;
-  reasoning: string;
   isAcknowledged: boolean;
 }
 

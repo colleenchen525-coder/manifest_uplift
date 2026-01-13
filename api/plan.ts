@@ -1,25 +1,34 @@
 const DEFAULT_BASE_URL = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1";
 const DEFAULT_MODEL = "qwen3-vl-flash";
 
-const buildSystemPrompt = (nickname: string, history: any[]) => {
-  const historyContext =
-    history && history.length > 0
-      ? `User History: ${JSON.stringify(history.slice(0, 3))}`
-      : "No previous history.";
+const SYSTEM_PROMPT = `You are a behavioral science coach.
 
-  return `
-    You are an expert in Behavioral Psychology and Self-Affirmation Theory.
-    Help user "${nickname}" turn a wish into a plan.
-    
-    Context: ${historyContext}
+Your task is not to motivate,
+but to convert vague goals into concrete, controllable actions.`;
 
-    1. **Affirmations**: Create 5 distinct, powerful, present-tense "I am" statements. 
-       **CONSTRAINT**: Each affirmation must be **UNDER 10 WORDS**.
-    2. **Reasoning**: For each affirmation, briefly explain scientifically why it works (1 sentence).
-    3. **Micro-Actions**: Break the wish down into **EXACTLY 2** incredibly small, immediate actions (Tiny Habits). 
-       These must be doable TODAY, taking less than 5 minutes.
-  `;
-};
+const buildUserPrompt = (goal: string) => `User goal: "${goal}"
+
+Step 1: Classify the goal:
+- Domain (financial / health / career / relationship)
+- Time horizon (short / long)
+- What the user can directly control today
+
+Step 2: Generate:
+1. 5 affirmations:
+- Must mention personal agency
+- Must explicitly reference the goal domain
+- within 15 words
+
+2. 2 micro-actions:
+- Must be doable in 15 minutes
+- Must create awareness or feedback
+- Must clearly connect to the goal
+
+Return JSON only in the following format:
+{
+  "affirmations": ["string"],
+  "micro_actions": ["string"]
+}`;
 
 const coerceBody = (body: any) => {
   if (!body) return {};
@@ -31,6 +40,36 @@ const coerceBody = (body: any) => {
     }
   }
   return body;
+};
+
+const FALLBACK_RESPONSE = {
+  affirmations: [
+    "I am taking steady steps toward my financial goal.",
+    "I control my spending choices to build financial security.",
+    "I am actively growing my career skills every day.",
+    "I am prioritizing my health through consistent daily habits.",
+    "I am showing up for my relationships with care and intention."
+  ],
+  micro_actions: [
+    "Track one expense or habit related to your goal for 10 minutes.",
+    "Write down one measurable action you can complete today."
+  ]
+};
+
+const parsePlanContent = (content: string) => {
+  try {
+    return JSON.parse(content);
+  } catch {
+    const match = content.match(/\{[\s\S]*\}/);
+    if (match) {
+      try {
+        return JSON.parse(match[0]);
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
 };
 
 export default async function handler(req: any, res: any) {
@@ -67,8 +106,8 @@ export default async function handler(req: any, res: any) {
       temperature: 0.7,
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: buildSystemPrompt(nickname, history) },
-        { role: "user", content: `My wish is: "${wish}"` }
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: buildUserPrompt(wish) }
       ]
     })
   });
@@ -87,13 +126,21 @@ export default async function handler(req: any, res: any) {
     return;
   }
 
-  try {
-    const parsed = JSON.parse(content);
-    const affirmations = Array.isArray(parsed.affirmations) ? parsed.affirmations.slice(0, 5) : [];
-    const microActions = Array.isArray(parsed.microActions) ? parsed.microActions.slice(0, 2) : [];
-
-    res.status(200).json({ affirmations, microActions });
-  } catch (error: any) {
-    res.status(500).json({ error: "Invalid JSON response from DashScope" });
+  const parsed = parsePlanContent(content);
+  if (!parsed || typeof parsed !== "object") {
+    res.status(200).json(FALLBACK_RESPONSE);
+    return;
   }
+
+  const affirmations = Array.isArray(parsed.affirmations)
+    ? parsed.affirmations.filter((item: unknown) => typeof item === "string").slice(0, 5)
+    : [];
+  const microActions = Array.isArray(parsed.micro_actions)
+    ? parsed.micro_actions.filter((item: unknown) => typeof item === "string").slice(0, 2)
+    : [];
+
+  res.status(200).json({
+    affirmations: affirmations.length ? affirmations : FALLBACK_RESPONSE.affirmations,
+    micro_actions: microActions.length ? microActions : FALLBACK_RESPONSE.micro_actions
+  });
 }
