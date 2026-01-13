@@ -1,4 +1,4 @@
-export interface MicroAction {
+export interface GoalAction {
   id: string;
   text: string;
   isCompleted: boolean;
@@ -12,7 +12,7 @@ export interface Affirmation {
 
 export interface ManifestationPlan {
   affirmations: Affirmation[];
-  microActions: MicroAction[];
+  actions: GoalAction[];
   generatedAt: string; // ISO Date string
 }
 
