@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { UserState, MicroAction, UserGoal } from '../types';
+import { UserState, GoalAction, UserGoal } from '../types';
 import { CheckIcon, BookHeartIcon, HeartIcon, MenuIcon } from '../components/Icons';
 
 interface DashboardProps {
@@ -11,7 +11,7 @@ interface DashboardProps {
   onOpenSidebar: () => void;
 }
 
-const ActionItem: React.FC<{ action: MicroAction; onToggle: () => void }> = ({ action, onToggle }) => {
+const ActionItem: React.FC<{ action: GoalAction; onToggle: () => void }> = ({ action, onToggle }) => {
   return (
     <div 
       onClick={onToggle}
@@ -47,7 +47,7 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   // --- Progress Calculation ---
   const hasAckAffirmation = plan.affirmations.some(affirmation => affirmation.isAcknowledged);
-  const completedActionsCount = plan.microActions.filter(action => action.isCompleted).length;
+  const completedActionsCount = plan.actions.filter(action => action.isCompleted).length;
   const hasGratitude = state.gratitudeEntries.some(entry => {
     const entryDate = new Date(entry.date).toDateString();
     const today = new Date().toDateString();
@@ -162,11 +162,11 @@ const Dashboard: React.FC<DashboardProps> = ({
            </div>
         </div>
 
-        {/* 3. Micro Actions */}
+        {/* 3. Actions */}
         <div>
-          <h3 className="text-lg font-bold text-stone-900 mb-3 px-1">Today’s action</h3>
+          <h3 className="text-lg font-bold text-stone-900 mb-3 px-1">Today’s actions</h3>
           <div className="space-y-3">
-            {plan.microActions.map((action) => (
+            {plan.actions.map((action) => (
               <ActionItem
                 key={action.id}
                 action={action}

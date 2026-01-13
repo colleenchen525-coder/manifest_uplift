@@ -15,60 +15,36 @@ const App = () => {
       const parsed = JSON.parse(saved);
 
       const normalizePlan = (plan: any) => {
-        if (Array.isArray(plan?.affirmations) && Array.isArray(plan?.microActions)) {
+        if (Array.isArray(plan?.affirmations) && Array.isArray(plan?.actions)) {
           return plan;
         }
-        const fallbackAffirmation = {
-          id: Math.random().toString(36).substr(2, 9),
-          text: "I am taking small steps toward my goal today.",
-          isAcknowledged: false
-        };
-        const fallbackMicroAction = {
-          id: Math.random().toString(36).substr(2, 9),
-          text: "Write down one concrete action you can complete in five minutes.",
-          isCompleted: false
-        };
-        const legacyAffirmations = Array.isArray(plan?.affirmations) ? plan.affirmations : null;
-        const legacyMicroActions = Array.isArray(plan?.microActions) ? plan.microActions : null;
-        const singleAffirmation = plan?.affirmation;
-        const singleMicroAction = plan?.microAction;
+        const legacyAffirmations = Array.isArray(plan?.affirmations) ? plan.affirmations : [];
+        const legacyActions = Array.isArray(plan?.actions)
+          ? plan.actions
+          : Array.isArray(plan?.microActions)
+            ? plan.microActions
+            : [];
 
         const affirmations = legacyAffirmations
-          ? legacyAffirmations
-              .filter((affirmation: any) => affirmation?.text)
-              .slice(0, 5)
-              .map((affirmation: any) => ({
-                id: affirmation.id || Math.random().toString(36).substr(2, 9),
-                text: affirmation.text,
-                isAcknowledged: !!affirmation.isAcknowledged
-              }))
-          : singleAffirmation?.text
-            ? [{
-                id: singleAffirmation.id || Math.random().toString(36).substr(2, 9),
-                text: singleAffirmation.text,
-                isAcknowledged: !!singleAffirmation.isAcknowledged
-              }]
-            : [fallbackAffirmation];
+          .filter((affirmation: any) => affirmation?.text)
+          .slice(0, 5)
+          .map((affirmation: any) => ({
+            id: affirmation.id || Math.random().toString(36).substr(2, 9),
+            text: affirmation.text,
+            isAcknowledged: !!affirmation.isAcknowledged
+          }));
 
-        const microActions = legacyMicroActions
-          ? legacyMicroActions
-              .filter((action: any) => action?.text)
-              .slice(0, 2)
-              .map((action: any) => ({
-                id: action.id || Math.random().toString(36).substr(2, 9),
-                text: action.text,
-                isCompleted: !!action.isCompleted
-              }))
-          : singleMicroAction?.text
-            ? [{
-                id: singleMicroAction.id || Math.random().toString(36).substr(2, 9),
-                text: singleMicroAction.text,
-                isCompleted: !!singleMicroAction.isCompleted
-              }]
-            : [fallbackMicroAction];
+        const actions = legacyActions
+          .filter((action: any) => action?.text)
+          .slice(0, 2)
+          .map((action: any) => ({
+            id: action.id || Math.random().toString(36).substr(2, 9),
+            text: action.text,
+            isCompleted: !!action.isCompleted
+          }));
         return {
           affirmations,
-          microActions,
+          actions,
           generatedAt: plan?.generatedAt || new Date().toISOString()
         };
       };
@@ -180,10 +156,10 @@ const App = () => {
 
         const updatedGoals = prev.goals.map(goal => {
             if (goal.id === prev.activeGoalId) {
-                const updatedActions = goal.plan.microActions.map(action =>
+                const updatedActions = goal.plan.actions.map(action =>
                   action.id === id ? { ...action, isCompleted } : action
                 );
-                return { ...goal, plan: { ...goal.plan, microActions: updatedActions } };
+                return { ...goal, plan: { ...goal.plan, actions: updatedActions } };
             }
             return goal;
         });
