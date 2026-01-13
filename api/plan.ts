@@ -4,9 +4,23 @@ const DEFAULT_MODEL = "qwen3-vl-flash";
 const SYSTEM_PROMPT = `You are a behavioral science coach.
 
 Your task is not to motivate,
-but to convert vague goals into concrete, controllable actions.`;
+but to convert vague goals into concrete, controllable actions.
+
+You must NOT reinterpret the goal.
+You must stay anchored to the user's stated intent.`;
 
 const buildUserPrompt = (goal: string) => `User goal: "${goal}"
+
+Step 0: Define the goal anchor.
+- Rewrite the user's goal into ONE concrete anchor phrase.
+- The anchor must preserve the original intent.
+- Do NOT change the meaning or domain.
+
+Examples:
+- "I want to be rich" → "personal financial wealth and money management"
+- "I want to be healthier" → "physical health and daily habits"
+
+Return the anchor internally (do not show to user).
 
 Step 1: Classify the goal:
 - Domain (financial / health / career / relationship)
@@ -16,13 +30,16 @@ Step 1: Classify the goal:
 Step 2: Generate:
 1. 5 affirmations:
 - Must mention personal agency
-- Must explicitly reference the goal domain
+- Must explicitly reference the goal domain and the goal anchor
 - within 15 words
 
 2. 2 micro-actions:
 - Must be doable in 15 minutes
-- Must create awareness or feedback
-- Must clearly connect to the goal
+- Must involve a concrete object related to the anchor
+  (e.g. bank app, cash amount, balance, expense number)
+- Must produce a visible or written outcome
+- Do NOT use vague verbs like "track", "think", "reflect" without an object
+- Must clearly connect to the goal and the goal anchor
 
 Return JSON only in the following format:
 {
