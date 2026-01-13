@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { UserState, MicroAction, UserGoal } from '../types';
 import { CheckIcon, BookHeartIcon, HeartIcon, MenuIcon } from '../components/Icons';
 
@@ -41,14 +41,13 @@ const Dashboard: React.FC<DashboardProps> = ({
   onAddGratitude,
   onOpenSidebar
 }) => {
+  const { plan } = activeGoal;
   const [activeSlide, setActiveSlide] = useState(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  
-  const { plan } = activeGoal;
 
   // --- Progress Calculation ---
-  const hasAckAffirmation = plan.affirmations.some(a => a.isAcknowledged);
-  const completedActionsCount = plan.microActions.filter(a => a.isCompleted).length;
+  const hasAckAffirmation = plan.affirmations.some(affirmation => affirmation.isAcknowledged);
+  const completedActionsCount = plan.microActions.filter(action => action.isCompleted).length;
   const hasGratitude = state.gratitudeEntries.some(entry => {
     const entryDate = new Date(entry.date).toDateString();
     const today = new Date().toDateString();
@@ -90,7 +89,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           <div className="flex items-end justify-between mb-3 px-1">
              <div>
                <h1 className="text-3xl font-display font-bold text-stone-900">Hi, {state.nickname}</h1>
-               <p className="text-stone-500 font-medium text-sm mt-1">Let's build momentum.</p>
+               <p className="text-stone-500 font-medium text-sm mt-1">One step today.</p>
              </div>
              <div className="text-right">
                 <span className="text-3xl font-bold text-orange-600 font-display">{Math.round(progressPercent)}%</span>
@@ -116,54 +115,46 @@ const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
 
-        {/* 2. Affirmations Carousel */}
+        {/* 2. Affirmation */}
         <div>
            <div className="flex items-center justify-between mb-3 px-1">
               <h3 className="text-lg font-bold text-stone-900">Affirmation</h3>
               <div className="flex space-x-1">
                 {plan.affirmations.map((_, idx) => (
-                  <div 
-                    key={idx} 
+                  <div
+                    key={idx}
                     className={`h-1.5 rounded-full transition-all duration-300 ${
                       idx === activeSlide ? 'w-4 bg-orange-400' : 'w-1.5 bg-stone-200'
-                    }`} 
+                    }`}
                   />
                 ))}
               </div>
            </div>
-           
+
            <div className="relative group">
-              <div 
+              <div
                 ref={scrollContainerRef}
                 onScroll={handleScroll}
                 className="flex overflow-x-auto snap-x-mandatory no-scrollbar gap-4 pb-4"
               >
-                {plan.affirmations.map((aff) => (
-                  <div key={aff.id} className="min-w-full snap-center">
-                    <div className="bg-white rounded-[2rem] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-stone-50 h-full flex flex-col justify-between min-h-[220px]">
-                       <div>
-                          <h2 className="text-2xl font-display font-semibold text-stone-900 leading-tight">
-                            "{aff.text}"
-                          </h2>
-                          <div className="mt-4 flex items-start space-x-2">
-                             <div className="w-0.5 h-8 bg-orange-200 rounded-full mt-1"></div>
-                             <p className="text-sm text-stone-500 leading-relaxed italic">
-                                {aff.reasoning}
-                             </p>
-                          </div>
-                       </div>
-                       
-                       <button 
-                          onClick={() => onAckAffirmation(aff.id)}
-                          className={`mt-6 w-full flex items-center justify-center space-x-2 py-3 rounded-2xl transition-all duration-300 font-medium ${
-                            aff.isAcknowledged 
-                              ? 'bg-orange-50 text-orange-700' 
-                              : 'bg-stone-900 text-white shadow-lg shadow-stone-200 hover:bg-stone-800'
-                          }`}
-                        >
-                          <HeartIcon className={`w-5 h-5 ${aff.isAcknowledged ? 'fill-orange-600 text-orange-600' : 'text-white'}`} />
-                          <span>{aff.isAcknowledged ? "I Believe" : "Tap to Affirm"}</span>
-                        </button>
+                {plan.affirmations.map((affirmation) => (
+                  <div key={affirmation.id} className="min-w-full snap-center">
+                    <div className="bg-white rounded-[2rem] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-stone-50 h-full flex flex-col justify-between min-h-[200px]">
+                      <h2 className="text-2xl font-display font-semibold text-stone-900 leading-tight">
+                        "{affirmation.text}"
+                      </h2>
+
+                      <button
+                        onClick={() => onAckAffirmation(affirmation.id)}
+                        className={`mt-6 w-full flex items-center justify-center space-x-2 py-3 rounded-2xl transition-all duration-300 font-medium ${
+                          affirmation.isAcknowledged 
+                            ? 'bg-orange-50 text-orange-700' 
+                            : 'bg-stone-900 text-white shadow-lg shadow-stone-200 hover:bg-stone-800'
+                        }`}
+                      >
+                        <HeartIcon className={`w-5 h-5 ${affirmation.isAcknowledged ? 'fill-orange-600 text-orange-600' : 'text-white'}`} />
+                        <span>{affirmation.isAcknowledged ? "I Believe" : "I affirm"}</span>
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -173,13 +164,13 @@ const Dashboard: React.FC<DashboardProps> = ({
 
         {/* 3. Micro Actions */}
         <div>
-          <h3 className="text-lg font-bold text-stone-900 mb-3 px-1">Today's Actions</h3>
+          <h3 className="text-lg font-bold text-stone-900 mb-3 px-1">Today’s action</h3>
           <div className="space-y-3">
             {plan.microActions.map((action) => (
-              <ActionItem 
-                key={action.id} 
-                action={action} 
-                onToggle={() => onUpdateAction(action.id, !action.isCompleted)} 
+              <ActionItem
+                key={action.id}
+                action={action}
+                onToggle={() => onUpdateAction(action.id, !action.isCompleted)}
               />
             ))}
           </div>

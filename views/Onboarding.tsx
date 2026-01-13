@@ -49,7 +49,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
                 Make it Real
               </h1>
               <p className="text-stone-500 text-lg mt-2 leading-relaxed">
-                Turn your intention into scientific<br/>micro-wins.
+                Turn your goal into today’s action.
               </p>
             </div>
           </div>
@@ -74,13 +74,13 @@ const Onboarding: React.FC<OnboardingProps> = ({
 
               <div className="space-y-2">
                 <label htmlFor="wish" className="block text-sm font-semibold text-stone-900 ml-1">
-                  What is your new goal?
+                  Your goal
                 </label>
                 <textarea
                   id="wish"
                   rows={4}
                   className="block w-full rounded-2xl border-0 py-4 px-5 text-stone-900 bg-white shadow-[0_2px_10px_rgb(0,0,0,0.03)] ring-1 ring-inset ring-stone-200 placeholder:text-stone-400 focus:ring-2 focus:ring-inset focus:ring-orange-500 text-lg leading-relaxed resize-none transition-all"
-                  placeholder="e.g., I want to run a marathon..."
+                  placeholder="I want to run a marathon..."
                   value={wish}
                   onChange={(e) => setWish(e.target.value)}
                 />
@@ -97,11 +97,6 @@ const Onboarding: React.FC<OnboardingProps> = ({
             </button>
           </form>
           
-          <div className="border-t border-stone-100 pt-6">
-            <p className="text-[10px] uppercase tracking-widest text-center text-stone-400 font-semibold">
-               Powered by Behavioral Science
-            </p>
-          </div>
         </div>
       </div>
     </div>

@@ -5,22 +5,22 @@ const generateId = () => Math.random().toString(36).substr(2, 9);
 
 const fallbackPlan = (): ManifestationPlan => ({
   affirmations: [
-    { id: generateId(), text: "I am capable of change.", reasoning: "Self-efficacy is the foundation of action.", isAcknowledged: false },
-    { id: generateId(), text: "I embrace small steps.", reasoning: "Small wins build momentum.", isAcknowledged: false },
-    { id: generateId(), text: "I focus on progress.", reasoning: "Perfectionism hinders execution.", isAcknowledged: false },
-    { id: generateId(), text: "I am building a better me.", reasoning: "Identity-based habits stick longer.", isAcknowledged: false },
-    { id: generateId(), text: "I trust the process.", reasoning: "Patience reduces cognitive load.", isAcknowledged: false },
+    { id: generateId(), text: "I am taking steady steps toward my financial goal.", isAcknowledged: false },
+    { id: generateId(), text: "I control my spending choices to build financial security.", isAcknowledged: false },
+    { id: generateId(), text: "I am actively growing my career skills every day.", isAcknowledged: false },
+    { id: generateId(), text: "I am prioritizing my health through consistent daily habits.", isAcknowledged: false },
+    { id: generateId(), text: "I am showing up for my relationships with care and intention.", isAcknowledged: false }
   ],
   microActions: [
-    { id: generateId(), text: "Take 3 deep breaths right now.", isCompleted: false },
-    { id: generateId(), text: "Write down one top priority.", isCompleted: false }
+    { id: generateId(), text: "Track one expense or habit related to your goal for 10 minutes.", isCompleted: false },
+    { id: generateId(), text: "Write down one measurable action you can complete today.", isCompleted: false }
   ],
   generatedAt: new Date().toISOString()
 });
 
 type PlanResponse = {
-  affirmations: { text: string; reasoning: string }[];
-  microActions: string[];
+  affirmations: string[];
+  micro_actions: string[];
 };
 
 export const generatePlanFromWish = async (
@@ -43,17 +43,24 @@ export const generatePlanFromWish = async (
 
     const data = (await response.json()) as PlanResponse;
 
-    const microActions: MicroAction[] = (data.microActions || []).slice(0, 2).map((actionText: string) => ({
+    const fallback = fallbackPlan();
+    const affirmationTexts = Array.isArray(data.affirmations) && data.affirmations.length
+      ? data.affirmations.slice(0, 5)
+      : fallback.affirmations.map(affirmation => affirmation.text);
+    const microActionTexts = Array.isArray(data.micro_actions) && data.micro_actions.length
+      ? data.micro_actions.slice(0, 2)
+      : fallback.microActions.map(action => action.text);
+
+    const affirmations: Affirmation[] = affirmationTexts.map(text => ({
       id: generateId(),
-      text: actionText,
-      isCompleted: false
+      text,
+      isAcknowledged: false
     }));
 
-    const affirmations: Affirmation[] = (data.affirmations || []).slice(0, 5).map((aff: any) => ({
+    const microActions: MicroAction[] = microActionTexts.map(text => ({
       id: generateId(),
-      text: aff.text,
-      reasoning: aff.reasoning,
-      isAcknowledged: false
+      text,
+      isCompleted: false
     }));
 
     return {

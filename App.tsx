@@ -11,8 +11,67 @@ const App = () => {
   const [userState, setUserState] = useState<UserState>(() => {
     // Initial Load from LocalStorage
     const saved = localStorage.getItem('microWinState');
-    if (saved) {
+      if (saved) {
       const parsed = JSON.parse(saved);
+
+      const normalizePlan = (plan: any) => {
+        if (Array.isArray(plan?.affirmations) && Array.isArray(plan?.microActions)) {
+          return plan;
+        }
+        const fallbackAffirmation = {
+          id: Math.random().toString(36).substr(2, 9),
+          text: "I am taking small steps toward my goal today.",
+          isAcknowledged: false
+        };
+        const fallbackMicroAction = {
+          id: Math.random().toString(36).substr(2, 9),
+          text: "Write down one concrete action you can complete in five minutes.",
+          isCompleted: false
+        };
+        const legacyAffirmations = Array.isArray(plan?.affirmations) ? plan.affirmations : null;
+        const legacyMicroActions = Array.isArray(plan?.microActions) ? plan.microActions : null;
+        const singleAffirmation = plan?.affirmation;
+        const singleMicroAction = plan?.microAction;
+
+        const affirmations = legacyAffirmations
+          ? legacyAffirmations
+              .filter((affirmation: any) => affirmation?.text)
+              .slice(0, 5)
+              .map((affirmation: any) => ({
+                id: affirmation.id || Math.random().toString(36).substr(2, 9),
+                text: affirmation.text,
+                isAcknowledged: !!affirmation.isAcknowledged
+              }))
+          : singleAffirmation?.text
+            ? [{
+                id: singleAffirmation.id || Math.random().toString(36).substr(2, 9),
+                text: singleAffirmation.text,
+                isAcknowledged: !!singleAffirmation.isAcknowledged
+              }]
+            : [fallbackAffirmation];
+
+        const microActions = legacyMicroActions
+          ? legacyMicroActions
+              .filter((action: any) => action?.text)
+              .slice(0, 2)
+              .map((action: any) => ({
+                id: action.id || Math.random().toString(36).substr(2, 9),
+                text: action.text,
+                isCompleted: !!action.isCompleted
+              }))
+          : singleMicroAction?.text
+            ? [{
+                id: singleMicroAction.id || Math.random().toString(36).substr(2, 9),
+                text: singleMicroAction.text,
+                isCompleted: !!singleMicroAction.isCompleted
+              }]
+            : [fallbackMicroAction];
+        return {
+          affirmations,
+          microActions,
+          generatedAt: plan?.generatedAt || new Date().toISOString()
+        };
+      };
       
       // MIGRATION LOGIC
       if (!parsed.goals) {
@@ -21,7 +80,7 @@ const App = () => {
             goals.push({
                 id: 'legacy-goal',
                 wish: parsed.wish,
-                plan: parsed.plan,
+                plan: normalizePlan(parsed.plan),
                 createdAt: parsed.plan.generatedAt || new Date().toISOString()
             });
         }
@@ -34,7 +93,13 @@ const App = () => {
             history: parsed.history || []
         };
       }
-      return parsed;
+      return {
+        ...parsed,
+        goals: parsed.goals.map((goal: any) => ({
+          ...goal,
+          plan: normalizePlan(goal.plan)
+        }))
+      };
     }
     
     // Default initial state
@@ -115,8 +180,8 @@ const App = () => {
 
         const updatedGoals = prev.goals.map(goal => {
             if (goal.id === prev.activeGoalId) {
-                const updatedActions = goal.plan.microActions.map(action => 
-                    action.id === id ? { ...action, isCompleted } : action
+                const updatedActions = goal.plan.microActions.map(action =>
+                  action.id === id ? { ...action, isCompleted } : action
                 );
                 return { ...goal, plan: { ...goal.plan, microActions: updatedActions } };
             }
@@ -133,8 +198,10 @@ const App = () => {
 
         const updatedGoals = prev.goals.map(goal => {
             if (goal.id === prev.activeGoalId) {
-                const updatedAffirmations = goal.plan.affirmations.map(aff => 
-                    aff.id === id ? { ...aff, isAcknowledged: !aff.isAcknowledged } : aff
+                const updatedAffirmations = goal.plan.affirmations.map(affirmation =>
+                  affirmation.id === id
+                    ? { ...affirmation, isAcknowledged: !affirmation.isAcknowledged }
+                    : affirmation
                 );
                 return { ...goal, plan: { ...goal.plan, affirmations: updatedAffirmations } };
             }
