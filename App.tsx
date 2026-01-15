@@ -6,78 +6,144 @@ import Sidebar from './components/Sidebar';
 import { generatePlanFromWish } from './services/planService';
 import { UserState, ViewState, GratitudeEntry, UserGoal } from './types';
 
+type PlanAffirmation = {
+  id: string;
+  text: string;
+  isAcknowledged: boolean;
+};
+
+type PlanAction = {
+  id: string;
+  text: string;
+  isCompleted: boolean;
+};
+
+type NormalizedPlan = {
+  affirmations: PlanAffirmation[];
+  actions: PlanAction[];
+  generatedAt: string;
+};
+
+const makeId = () => Math.random().toString(36).substr(2, 9);
+
+const coerceString = (v: any) => (typeof v === 'string' ? v.trim() : '');
+
+const normalizePlan = (plan: any): NormalizedPlan => {
+  // 1) Extract raw lists from multiple possible shapes
+  const rawAffirmations = Array.isArray(plan?.affirmations) ? plan.affirmations : [];
+  const rawActions = Array.isArray(plan?.actions)
+    ? plan.actions
+    : Array.isArray(plan?.microActions)
+      ? plan.microActions
+      : Array.isArray(plan?.micro_actions)
+        ? plan.micro_actions
+        : [];
+
+  // 2) Normalize affirmations:
+  // supports:
+  // - ["string", ...]
+  // - [{id,text,isAcknowledged}, ...]
+  // - legacy objects with .text
+  const affirmations: PlanAffirmation[] = rawAffirmations
+    .slice(0, 5)
+    .map((a: any) => {
+      if (typeof a === 'string') {
+        const text = a.trim();
+        return text
+          ? { id: makeId(), text, isAcknowledged: false }
+          : null;
+      }
+      if (a && typeof a === 'object') {
+        const text = coerceString(a.text);
+        if (!text) return null;
+        return {
+          id: coerceString(a.id) || makeId(),
+          text,
+          isAcknowledged: !!a.isAcknowledged
+        };
+      }
+      return null;
+    })
+    .filter(Boolean) as PlanAffirmation[];
+
+  // 3) Normalize actions:
+  // supports:
+  // - ["string", ...]
+  // - [{id,text,isCompleted}, ...]
+  // - legacy objects with .text
+  const actions: PlanAction[] = rawActions
+    .slice(0, 2)
+    .map((a: any) => {
+      if (typeof a === 'string') {
+        const text = a.trim();
+        return text
+          ? { id: makeId(), text, isCompleted: false }
+          : null;
+      }
+      if (a && typeof a === 'object') {
+        const text = coerceString(a.text);
+        if (!text) return null;
+        return {
+          id: coerceString(a.id) || makeId(),
+          text,
+          isCompleted: !!a.isCompleted
+        };
+      }
+      return null;
+    })
+    .filter(Boolean) as PlanAction[];
+
+  // 4) Ensure exact counts (pad only if missing; do NOT duplicate the same string)
+  // If something is missing, keep it empty rather than cloning first item.
+  const safeAffirmations = affirmations.slice(0, 5);
+  const safeActions = actions.slice(0, 2);
+
+  return {
+    affirmations: safeAffirmations,
+    actions: safeActions,
+    generatedAt: coerceString(plan?.generatedAt) || new Date().toISOString()
+  };
+};
+
 const App = () => {
   // --- State Management ---
   const [userState, setUserState] = useState<UserState>(() => {
     // Initial Load from LocalStorage
     const saved = localStorage.getItem('microWinState');
-      if (saved) {
+    if (saved) {
       const parsed = JSON.parse(saved);
 
-      const normalizePlan = (plan: any) => {
-        if (Array.isArray(plan?.affirmations) && Array.isArray(plan?.actions)) {
-          return plan;
-        }
-        const legacyAffirmations = Array.isArray(plan?.affirmations) ? plan.affirmations : [];
-        const legacyActions = Array.isArray(plan?.actions)
-          ? plan.actions
-          : Array.isArray(plan?.microActions)
-            ? plan.microActions
-            : [];
-
-        const affirmations = legacyAffirmations
-          .filter((affirmation: any) => affirmation?.text)
-          .slice(0, 5)
-          .map((affirmation: any) => ({
-            id: affirmation.id || Math.random().toString(36).substr(2, 9),
-            text: affirmation.text,
-            isAcknowledged: !!affirmation.isAcknowledged
-          }));
-
-        const actions = legacyActions
-          .filter((action: any) => action?.text)
-          .slice(0, 2)
-          .map((action: any) => ({
-            id: action.id || Math.random().toString(36).substr(2, 9),
-            text: action.text,
-            isCompleted: !!action.isCompleted
-          }));
-        return {
-          affirmations,
-          actions,
-          generatedAt: plan?.generatedAt || new Date().toISOString()
-        };
-      };
-      
       // MIGRATION LOGIC
       if (!parsed.goals) {
         const goals: UserGoal[] = [];
         if (parsed.hasWish && parsed.wish && parsed.plan) {
-            goals.push({
-                id: 'legacy-goal',
-                wish: parsed.wish,
-                plan: normalizePlan(parsed.plan),
-                createdAt: parsed.plan.generatedAt || new Date().toISOString()
-            });
+          goals.push({
+            id: 'legacy-goal',
+            wish: parsed.wish,
+            plan: normalizePlan(parsed.plan),
+            createdAt: parsed.plan.generatedAt || new Date().toISOString()
+          });
         }
         return {
-            userId: parsed.userId || '',
-            nickname: '',
-            activeGoalId: goals.length > 0 ? goals[0].id : null,
-            goals: goals,
-            gratitudeEntries: parsed.gratitudeEntries || [],
-            history: parsed.history || []
+          userId: parsed.userId || '',
+          nickname: '',
+          activeGoalId: goals.length > 0 ? goals[0].id : null,
+          goals,
+          gratitudeEntries: parsed.gratitudeEntries || [],
+          history: parsed.history || []
         };
       }
+
+      // Normalize all stored goals
       return {
         ...parsed,
-        goals: parsed.goals.map((goal: any) => ({
+        goals: (parsed.goals || []).map((goal: any) => ({
           ...goal,
           plan: normalizePlan(goal.plan)
         }))
       };
     }
-    
+
     // Default initial state
     return {
       userId: '',
@@ -91,7 +157,7 @@ const App = () => {
 
   const [view, setView] = useState<ViewState>(() => {
     if (userState.goals.length > 0 && userState.activeGoalId) {
-        return 'DASHBOARD';
+      return 'DASHBOARD';
     }
     return 'ONBOARDING';
   });
@@ -127,10 +193,13 @@ const App = () => {
   const handleWishConfirmed = async (wish: string, nickname: string) => {
     setView('LOADING');
     try {
-      const plan = await generatePlanFromWish(wish, nickname, userState.history);
-      
+      const rawPlan = await generatePlanFromWish(wish, nickname, userState.history);
+
+      // CRITICAL: normalize server response into the object-array plan the UI expects
+      const plan = normalizePlan(rawPlan);
+
       const newGoal: UserGoal = {
-        id: Math.random().toString(36).substr(2, 9),
+        id: makeId(),
         wish,
         plan,
         createdAt: new Date().toISOString()
@@ -138,63 +207,64 @@ const App = () => {
 
       setUserState(prev => ({
         ...prev,
-        nickname: nickname,
+        nickname,
         activeGoalId: newGoal.id,
         goals: [...prev.goals, newGoal]
       }));
+
       setView('DASHBOARD');
     } catch (error) {
-      console.error("Failed to generate plan", error);
+      console.error('Failed to generate plan', error);
       setView('ONBOARDING');
-      alert("Something went wrong generating your plan. Please try again.");
+      alert('Something went wrong generating your plan. Please try again.');
     }
   };
 
   const handleUpdateAction = (id: string, isCompleted: boolean) => {
     setUserState(prev => {
-        if (!prev.activeGoalId) return prev;
+      if (!prev.activeGoalId) return prev;
 
-        const updatedGoals = prev.goals.map(goal => {
-            if (goal.id === prev.activeGoalId) {
-                const updatedActions = goal.plan.actions.map(action =>
-                  action.id === id ? { ...action, isCompleted } : action
-                );
-                return { ...goal, plan: { ...goal.plan, actions: updatedActions } };
-            }
-            return goal;
-        });
+      const updatedGoals = prev.goals.map(goal => {
+        if (goal.id === prev.activeGoalId) {
+          const updatedActions = goal.plan.actions.map(action =>
+            action.id === id ? { ...action, isCompleted } : action
+          );
+          return { ...goal, plan: { ...goal.plan, actions: updatedActions } };
+        }
+        return goal;
+      });
 
-        return { ...prev, goals: updatedGoals };
+      return { ...prev, goals: updatedGoals };
     });
   };
 
   const handleAckAffirmation = (id: string) => {
     setUserState(prev => {
-        if (!prev.activeGoalId) return prev;
+      if (!prev.activeGoalId) return prev;
 
-        const updatedGoals = prev.goals.map(goal => {
-            if (goal.id === prev.activeGoalId) {
-                const updatedAffirmations = goal.plan.affirmations.map(affirmation =>
-                  affirmation.id === id
-                    ? { ...affirmation, isAcknowledged: !affirmation.isAcknowledged }
-                    : affirmation
-                );
-                return { ...goal, plan: { ...goal.plan, affirmations: updatedAffirmations } };
-            }
-            return goal;
-        });
+      const updatedGoals = prev.goals.map(goal => {
+        if (goal.id === prev.activeGoalId) {
+          const updatedAffirmations = goal.plan.affirmations.map(affirmation =>
+            affirmation.id === id
+              ? { ...affirmation, isAcknowledged: !affirmation.isAcknowledged }
+              : affirmation
+          );
+          return { ...goal, plan: { ...goal.plan, affirmations: updatedAffirmations } };
+        }
+        return goal;
+      });
 
-        return { ...prev, goals: updatedGoals };
+      return { ...prev, goals: updatedGoals };
     });
   };
 
   const handleAddGratitude = (text: string) => {
     const newEntry: GratitudeEntry = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: makeId(),
       text,
       date: new Date().toISOString()
     };
-    
+
     setUserState(prev => ({
       ...prev,
       gratitudeEntries: [newEntry, ...prev.gratitudeEntries]
@@ -202,12 +272,12 @@ const App = () => {
   };
 
   const handleSwitchGoal = (goalId: string) => {
-      setUserState(prev => ({ ...prev, activeGoalId: goalId }));
-      setView('DASHBOARD');
+    setUserState(prev => ({ ...prev, activeGoalId: goalId }));
+    setView('DASHBOARD');
   };
 
   const handleAddNewGoalRequest = () => {
-      setView('ONBOARDING');
+    setView('ONBOARDING');
   };
 
   // --- Render ---
@@ -226,8 +296,7 @@ const App = () => {
 
   return (
     <div className="antialiased text-stone-900 mx-auto max-w-lg bg-white min-h-screen shadow-2xl overflow-hidden relative">
-      {/* Sidebar is always mounted but conditionally visible */}
-      <Sidebar 
+      <Sidebar
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
         goals={userState.goals}
@@ -239,17 +308,17 @@ const App = () => {
       />
 
       {view === 'ONBOARDING' && (
-        <Onboarding 
-            onConfirm={handleWishConfirmed} 
-            existingNickname={userState.nickname}
-            onOpenSidebar={() => setIsSidebarOpen(true)}
-            hasExistingGoals={userState.goals.length > 0}
+        <Onboarding
+          onConfirm={handleWishConfirmed}
+          existingNickname={userState.nickname}
+          onOpenSidebar={() => setIsSidebarOpen(true)}
+          hasExistingGoals={userState.goals.length > 0}
         />
       )}
 
       {view === 'DASHBOARD' && activeGoal && (
         <>
-          <Dashboard 
+          <Dashboard
             state={userState}
             activeGoal={activeGoal}
             onUpdateAction={handleUpdateAction}
@@ -257,7 +326,7 @@ const App = () => {
             onAddGratitude={() => setIsGratitudeOpen(true)}
             onOpenSidebar={() => setIsSidebarOpen(true)}
           />
-          <GratitudeModal 
+          <GratitudeModal
             isOpen={isGratitudeOpen}
             onClose={() => setIsGratitudeOpen(false)}
             onSave={handleAddGratitude}
