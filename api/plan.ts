@@ -1,5 +1,5 @@
 const DEFAULT_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1";
-const DEFAULT_MODEL = "qwen3-vl-flash";
+const DEFAULT_MODEL = "qwen3-max";
 
 const SYSTEM_PROMPT = `You are a behavioral science coach.
 
